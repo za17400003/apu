@@ -1,0 +1,49 @@
+{
+  "name": "calculadora-precios-unitarios",
+  "version": "0.1.0",
+  "description": "Herramienta gratuita para cálculo de análisis de precios unitarios (APU) en construcción",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "e2e": "playwright test",
+    "lint": "eslint src --ext .ts,.tsx",
+    "codegraph": "mkdir -p .audit && codegraph ./src --output ./.audit/codegraph.html --csv ./.audit/codegraph.csv",
+    "codegraph:query": "node scripts/codegraph-query.mjs"
+  },
+  "dependencies": {
+    "dexie": "^4.0.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.1",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/react": "^14.1.2",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/ui": "^1.1.0",
+    "autoprefixer": "^10.4.16",
+    "fake-indexeddb": "^5.0.0",
+    "jsdom": "^29.1.1",
+    "postcss": "^8.4.32",
+    "tailwindcss": "^3.3.6",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.7",
+    "vitest": "^1.1.0"
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
