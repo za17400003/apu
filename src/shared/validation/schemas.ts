@@ -1,82 +1,90 @@
 import { z } from 'zod'
+import type { Abertura, Concepto, Insumo, Partida, Proyecto, Superficie } from '@/shared/domain/types'
+import { esFutura } from '@/shared/domain/fechas'
 
-// Esquemas de validación Zod
+// Validación al importar respaldos. Las mismas reglas que la UI (validation/numeros.ts):
+// cantidades > 0, costos ≥ 0, porcentajes 0–100. Los tipos deben coincidir con domain/types.ts.
+// Los respaldos de versiones anteriores se completan con valores por defecto.
 
-export const InsumoSchema = z.object({
+const porcentaje = z.number().min(0).max(100)
+const fecha = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha con formato AAAA-MM-DD')
+  .refine((f) => !esFutura(f), 'La fecha del precio no puede ser posterior a hoy')
+
+const InsumoSchema: z.ZodType<Insumo> = z.object({
   id: z.string(),
-  descripcion: z.string().min(1),
+  descripcion: z.string(),
   unidad: z.string().min(1),
-  cantidad: z.number().positive('La cantidad debe ser positiva'),
-  costo_unitario: z.number().nonnegative('El costo no puede ser negativo'),
-  desperdicio_pct: z.number().min(0).max(100),
+  cantidad: z.number().positive(),
+  costo_unitario: z.number().nonnegative(),
+  desperdicio_pct: porcentaje,
   fuente: z.string().optional(),
-  fecha_precio: z.string().optional(),
+  fecha_precio: fecha.optional(),
 })
 
-export const ConceptoSchema = z.object({
+const ConceptoSchema: z.ZodType<Concepto> = z.object({
   id: z.string(),
-  nombre: z.string().min(1),
+  nombre: z.string(),
   unidad_obra: z.string().min(1),
-  cantidad_base: z.number().positive(),
   materiales: z.array(InsumoSchema),
   mano_obra: z.array(InsumoSchema),
   equipo: z.array(InsumoSchema),
-  costo_directo: z.number().nonnegative(),
-  tasa_indirectos_pct: z.number().min(0).max(100),
+  tasa_indirectos_pct: porcentaje,
   base_indirectos: z.enum(['directo', 'materiales']),
-  tasa_utilidad_pct: z.number().min(0).max(100),
+  tasa_utilidad_pct: porcentaje,
   base_utilidad: z.enum(['directo+indirectos', 'directo']),
-  precio_unitario: z.number().nonnegative(),
-  fecha_actualizacion: z.string(),
 })
 
-export const AperturaSchema = z.object({
+const AberturaSchema: z.ZodType<Abertura> = z.object({
   id: z.string(),
   ancho_m: z.number().positive(),
   alto_m: z.number().positive(),
 })
 
-export const SuperficieSchema = z.object({
+const SuperficieSchema: z.ZodType<Superficie> = z.object({
   id: z.string(),
-  project_id: z.string(),
-  nombre: z.string().min(1),
+  nombre: z.string(),
   ancho_m: z.number().positive(),
   alto_m: z.number().positive(),
-  aberturas: z.array(AperturaSchema),
-  area_bruta: z.number().positive(),
-  area_neta: z.number().positive(),
+  aberturas: z.array(AberturaSchema),
   acabado: z.string(),
-  producto_id: z.string().optional(),
   rendimiento: z.number().positive(),
-  desperdicio_pct: z.number().min(0).max(100),
-  presentacion: z.string().min(1),
-  cantidad_redondeada: z.boolean(),
-  cantidad_total: z.number().nonnegative(),
-  fecha_actualizacion: z.string(),
+  unidad_compra: z.string().min(1),
+  presentacion_cantidad: z.number().positive(),
+  desperdicio_pct: porcentaje,
+  redondear_envases: z.boolean(),
 })
 
-export const ProyectoSchema = z.object({
+const PartidaSchema: z.ZodType<Partida> = z.object({
   id: z.string(),
-  nombre: z.string().min(1),
+  concepto_id: z.string(),
+  muro_id: z.string().optional(),
+  cantidad: z.number().nonnegative(),
+})
+
+export const ProyectoSchema: z.ZodType<Proyecto, z.ZodTypeDef, unknown> = z.object({
+  id: z.string(),
+  nombre: z.string(),
   fecha_creacion: z.string(),
-  ubicacion: z.string().optional(),
-  moneda: z.string(),
+  cliente: z.string().optional(),
+  obra: z.string().optional(),
+  folio: z.string().optional(),
+  moneda: z.string().min(3),
   notas: z.string().optional(),
+  iva_pct: porcentaje.default(0),
+  anticipo_pct: porcentaje.default(0),
+  vigencia_dias: z.number().int().nonnegative().default(15),
   conceptos: z.array(ConceptoSchema),
   superficies: z.array(SuperficieSchema),
+  partidas: z.array(PartidaSchema).default([]),
+  archivado: z.boolean().optional(),
 })
 
 export const BackupDataSchema = z.object({
-  version: z.string(),
-  schema_version: z.number(),
-  formula_version: z.number(),
+  app: z.string().optional(),
+  schema_version: z.number().int().positive(),
+  formula_version: z.number().int().positive(),
   fecha_backup: z.string(),
   proyectos: z.array(ProyectoSchema),
 })
-
-// Tipos inferidos de Zod
-export type Insumo = z.infer<typeof InsumoSchema>
-export type Concepto = z.infer<typeof ConceptoSchema>
-export type Superficie = z.infer<typeof SuperficieSchema>
-export type Proyecto = z.infer<typeof ProyectoSchema>
-export type BackupData = z.infer<typeof BackupDataSchema>

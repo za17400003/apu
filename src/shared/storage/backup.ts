@@ -1,151 +1,58 @@
-import { Proyecto } from '@/shared/domain/types'
-import { obtenerProyectos, db, initializeDatabase } from './db'
+import { BackupDataSchema } from '@/shared/validation/schemas'
+import { nuevoId } from '@/shared/domain/ids'
+import { guardarProyecto, obtenerProyectos } from './db'
 
-export interface BackupData {
-  version: string
-  schema_version: number
-  formula_version: number
-  fecha_backup: string
-  proyectos: Proyecto[]
-}
+const VERSION_ESQUEMA = 2
+const VERSION_FORMULA = 1
 
-const CURRENT_SCHEMA_VERSION = 1
-const CURRENT_FORMULA_VERSION = 1
-
-/**
- * Exporta todos los proyectos a JSON
- */
-export async function exportarRespaldo(): Promise<BackupData> {
+export async function construirRespaldo(): Promise<string> {
   const proyectos = await obtenerProyectos()
-
-  return {
-    version: '1.0.0',
-    schema_version: CURRENT_SCHEMA_VERSION,
-    formula_version: CURRENT_FORMULA_VERSION,
-    fecha_backup: new Date().toISOString(),
-    proyectos,
-  }
+  return JSON.stringify(
+    {
+      app: 'calculadora-apu',
+      schema_version: VERSION_ESQUEMA,
+      formula_version: VERSION_FORMULA,
+      fecha_backup: new Date().toISOString(),
+      proyectos,
+    },
+    null,
+    2
+  )
 }
 
-/**
- * Exporta datos como archivo JSON descargable
- */
 export async function descargarRespaldo(): Promise<void> {
-  const backup = await exportarRespaldo()
-  const json = JSON.stringify(backup, null, 2)
-  const blob = new Blob([json], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `calculadora-respaldo-${new Date().toISOString().split('T')[0]}.json`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
+  const json = await construirRespaldo()
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
+  const enlace = document.createElement('a')
+  enlace.href = url
+  enlace.download = `respaldo-apu-${new Date().toISOString().slice(0, 10)}.json`
+  enlace.click()
   URL.revokeObjectURL(url)
 }
 
 /**
- * Importa proyectos desde un archivo JSON
+ * Valida y agrega los proyectos de un respaldo como proyectos nuevos.
+ * Devuelve cuántos se importaron; lanza Error con mensaje legible si no es válido.
  */
-export async function importarRespaldo(archivo: File): Promise<{
-  proyectos_importados: number
-  errores: string[]
-}> {
-  const text = await archivo.text()
-  let data: BackupData
-
+export async function importarRespaldo(texto: string): Promise<number> {
+  let json: unknown
   try {
-    data = JSON.parse(text)
-  } catch (e) {
-    throw new Error('Archivo JSON inválido')
+    json = JSON.parse(texto)
+  } catch {
+    throw new Error('El archivo no es JSON válido.')
   }
 
-  // Validaciones
-  if (!data.proyectos || !Array.isArray(data.proyectos)) {
-    throw new Error('Estructura de respaldo inválida: no contiene proyectos')
+  const resultado = BackupDataSchema.safeParse(json)
+  if (!resultado.success) {
+    const ruta = resultado.error.issues[0]?.path.join('.') || 'raíz'
+    throw new Error(`El respaldo no tiene la estructura esperada (campo: ${ruta}).`)
+  }
+  if (resultado.data.schema_version > VERSION_ESQUEMA) {
+    throw new Error('El respaldo es de una versión más nueva de la aplicación.')
   }
 
-  if (data.schema_version > CURRENT_SCHEMA_VERSION) {
-    throw new Error('Versión de esquema más nueva que la aplicación. Actualiza la app.')
+  for (const proyecto of resultado.data.proyectos) {
+    await guardarProyecto({ ...proyecto, id: nuevoId() })
   }
-
-  const errores: string[] = []
-
-  // Importar proyectos
-  for (const proyecto of data.proyectos) {
-    try {
-      // Generar nuevo ID
-      const nuevoId = crypto.randomUUID()
-      const proyectoNuevo = {
-        ...proyecto,
-        id: nuevoId,
-        fecha_creacion: new Date().toISOString(),
-      }
-
-      await db.projects.add(proyectoNuevo)
-
-      // Importar conceptos y superficies relacionados
-      if (proyecto.conceptos && proyecto.conceptos.length > 0) {
-        for (const concepto of proyecto.conceptos) {
-          const conceptoNuevo = {
-            ...concepto,
-            id: crypto.randomUUID(),
-            project_id: nuevoId,
-          }
-          await db.concepts.add(conceptoNuevo)
-        }
-      }
-
-      if (proyecto.superficies && proyecto.superficies.length > 0) {
-        for (const superficie of proyecto.superficies) {
-          const superficiNueva = {
-            ...superficie,
-            id: crypto.randomUUID(),
-            project_id: nuevoId,
-          }
-          await db.surfaces.add(superficiNueva)
-        }
-      }
-    } catch (e) {
-      errores.push(`Error al importar proyecto "${proyecto.nombre}": ${String(e)}`)
-    }
-  }
-
-  return {
-    proyectos_importados: data.proyectos.length - errores.length,
-    errores,
-  }
-}
-
-/**
- * Importa desde input file element
- */
-export async function manejarArchivoImportacion(
-  event: React.ChangeEvent<HTMLInputElement>,
-  callback: (result: { proyectos_importados: number; errores: string[] }) => void
-): Promise<void> {
-  const archivo = event.target.files?.[0]
-  if (!archivo) return
-
-  try {
-    const result = await importarRespaldo(archivo)
-    callback(result)
-  } catch (e) {
-    callback({
-      proyectos_importados: 0,
-      errores: [String(e)],
-    })
-  }
-
-  // Limpiar input
-  event.target.value = ''
-}
-
-/**
- * Borra toda la base de datos y reinicializa
- */
-export async function borrarTodo(): Promise<void> {
-  await db.delete()
-  await db.open()
-  await initializeDatabase()
+  return resultado.data.proyectos.length
 }

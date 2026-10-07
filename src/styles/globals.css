@@ -12,8 +12,9 @@
     font-family: 'IBM Plex Mono', monospace;
   }
 
+  /* Monoespaciada solo para medidas y cantidades (ver CampoNumero y los importes). */
   input, textarea, select {
-    @apply font-mono;
+    font-family: inherit;
   }
 }
 
@@ -47,19 +48,192 @@
   }
 }
 
-/* Estilos de impresión */
+/* Documento de cotización: oculto en pantalla, es lo único que sale al imprimir. */
+.area-impresion {
+  display: none;
+}
+
 @media print {
-  .no-print {
-    display: none !important;
+  @page {
+    size: A4;
+    margin: 14mm 13mm;
   }
 
-  body {
-    background: white;
-    color: black;
+  body * {
+    visibility: hidden;
   }
 
-  .card {
+  .area-impresion,
+  .area-impresion * {
+    visibility: visible;
+  }
+
+  .area-impresion {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: #fff;
+    color: #111;
+    font-size: 10pt;
+    line-height: 1.35;
+  }
+
+  .imp {
+    font-family: 'IBM Plex Sans', Arial, sans-serif;
+  }
+
+  .imp-cabecera {
+    display: flex;
+    justify-content: space-between;
+    gap: 12mm;
+    border-bottom: 2px solid #111;
+    padding-bottom: 3mm;
+  }
+
+  .imp-cabecera p {
+    margin: 0;
+  }
+
+  .imp-marca {
+    font-size: 14pt;
+    font-weight: 700;
+  }
+
+  .imp-doc {
+    text-align: right;
+  }
+
+  .imp-titulo {
+    font-size: 15pt;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+
+  .imp-datos {
+    margin: 4mm 0;
+  }
+
+  .imp-datos p {
+    margin: 0.5mm 0;
+  }
+
+  .imp-tabla,
+  .imp-totales {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .imp-tabla th {
+    background: #e9e9e9;
+    border-top: 1px solid #111;
+    border-bottom: 1px solid #111;
+    padding: 1.5mm 2mm;
+    text-align: left;
+    font-weight: 700;
+  }
+
+  .imp-tabla td {
+    border-bottom: 1px solid #ccc;
+    padding: 1.5mm 2mm;
+    vertical-align: top;
+  }
+
+  .imp-tabla tr,
+  .imp-totales tr,
+  .imp-analisis {
     page-break-inside: avoid;
+  }
+
+  .imp-grupo td {
+    background: #f5f5f5;
+    font-weight: 700;
+  }
+
+  .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .imp-nota {
+    font-size: 8.5pt;
+    color: #444;
+  }
+
+  .imp-totales {
+    margin-top: 3mm;
+  }
+
+  .imp-totales td {
+    padding: 1mm 2mm;
+    width: 50%;
+  }
+
+  .imp-totales td:first-child {
+    width: auto;
+  }
+
+  .imp-total td {
+    border-top: 1px solid #111;
+    font-weight: 700;
+    font-size: 11pt;
+  }
+
+  .imp-condiciones {
+    margin-top: 5mm;
+  }
+
+  .imp-seccion {
+    font-weight: 700;
+    margin: 0 0 1mm;
+  }
+
+  .imp-firmas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16mm;
+    margin-top: 18mm;
+    page-break-inside: avoid;
+  }
+
+  .imp-firmas p {
+    margin: 0.5mm 0;
+  }
+
+  .imp-linea-firma {
+    border-top: 1px solid #111;
+    margin-top: 14mm;
+  }
+
+  .imp-anexo {
+    page-break-before: always;
+  }
+
+  .imp-analisis {
+    margin-bottom: 6mm;
+  }
+
+  .imp-analisis-titulo {
+    font-weight: 700;
+    margin: 3mm 0 1.5mm;
+  }
+
+  .w-10 {
+    width: 10mm;
+  }
+  .w-16 {
+    width: 16mm;
+  }
+  .w-20 {
+    width: 20mm;
+  }
+  .w-24 {
+    width: 24mm;
+  }
+  .w-28 {
+    width: 28mm;
   }
 }
 

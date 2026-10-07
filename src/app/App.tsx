@@ -1,156 +1,156 @@
 import { useEffect, useState } from 'react'
 import { Proyecto } from '@/shared/domain/types'
-import { initializeDatabase, obtenerProyectos, crearProyecto } from '@/shared/storage/db'
-import Sidebar from '@/shared/ui/Sidebar'
-import ProyectosView from '@/features/projects/ProyectosView'
+import { nuevoProyecto } from '@/shared/domain/factories'
+import { duplicarProyecto } from '@/shared/domain/duplicar'
+import { eliminarProyecto, guardarProyecto, limpiarBaseAnterior, obtenerProyectos } from '@/shared/storage/db'
+import { ProyectoTabs } from '@/shared/ui/ProyectoTabs'
+import { NavSecciones, Seccion } from '@/shared/ui/NavSecciones'
+import { ListaProyectos } from '@/features/proyectos/ListaProyectos'
+import ProyectoView from '@/features/projects/ProyectoView'
 import ApuView from '@/features/unit-prices/ApuView'
 import SuperficiesView from '@/features/surfaces/SuperficiesView'
-import AjustesView from '@/features/catalog/AjustesView'
+import PresupuestoView from '@/features/presupuesto/PresupuestoView'
+import AjustesView from '@/features/ajustes/AjustesView'
 
-type Seccion = 'proyectos' | 'apu' | 'superficies' | 'ajustes'
+/** Cuántos proyectos caben como pestañas de trabajo. El resto se busca en el historial. */
+const MAX_ABIERTOS = 5
 
 export default function App() {
-  const [proyectos, setProyectos] = useState<Proyecto[]>([])
-  const [proyectoActivo, setProyectoActivo] = useState<Proyecto | null>(null)
-  const [seccion, setSeccion] = useState<Seccion>('proyectos')
-  const [cargando, setCargando] = useState(true)
-  const [esMobil, setEsMobil] = useState(window.innerWidth < 768)
+  // null = cargando. Es la única copia en memoria; cada cambio se guarda y se refleja aquí.
+  const [proyectos, setProyectos] = useState<Proyecto[] | null>(null)
+  const [abiertosIds, setAbiertosIds] = useState<string[]>([]) // más reciente primero
+  const [activoId, setActivoId] = useState<string | null>(null)
+  const [vista, setVista] = useState<'historial' | 'proyecto' | 'ajustes'>('historial')
+  const [seccion, setSeccion] = useState<Seccion>('proyecto')
 
   useEffect(() => {
-    initializeDatabase().then(async () => {
-      const p = await obtenerProyectos()
-      setProyectos(p)
-      if (p.length > 0) {
-        setProyectoActivo(p[0])
-      }
-      setCargando(false)
+    limpiarBaseAnterior().then(async () => {
+      setProyectos(await obtenerProyectos())
     })
-
-    const handleResize = () => setEsMobil(window.innerWidth < 768)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  const crearNuevoProyecto = async () => {
-    const nombre = prompt('Nombre del proyecto:')
-    if (!nombre) return
-
-    const id = await crearProyecto({
-      nombre,
-      fecha_creacion: new Date().toISOString(),
-      moneda: 'MXN',
-      conceptos: [],
-      superficies: [],
-    })
-
-    const p = await obtenerProyectos()
-    setProyectos(p)
-    const nuevoProyecto = p.find((pr) => pr.id === id)
-    if (nuevoProyecto) {
-      setProyectoActivo(nuevoProyecto)
-      setSeccion('apu')
-    }
+  const abrir = (id: string) => {
+    setActivoId(id)
+    setVista('proyecto')
+    setSeccion('proyecto')
+    setAbiertosIds((previos) => [id, ...previos.filter((x) => x !== id)].slice(0, MAX_ABIERTOS))
   }
 
-  const actualizarProyectos = async () => {
-    const p = await obtenerProyectos()
-    setProyectos(p)
+  const cerrarPestana = (id: string) => {
+    setAbiertosIds((previos) => previos.filter((x) => x !== id))
+    if (activoId === id) setVista('historial')
   }
 
-  if (cargando) {
-    return (
-      <div className="w-full h-screen flex items-center justify-center bg-warmWhite">
-        <div className="text-center">
-          <p className="text-charcoal text-lg">Cargando...</p>
-        </div>
-      </div>
-    )
+  // Primero se actualiza la pantalla (sin latencia al teclear) y después se persiste.
+  const guardar = async (cambiado: Proyecto) => {
+    setProyectos((previos) => (previos ?? []).map((p) => (p.id === cambiado.id ? cambiado : p)))
+    await guardarProyecto(cambiado)
   }
+
+  const crear = async (nombre: string, desdeId?: string) => {
+    const origen = desdeId ? proyectos?.find((p) => p.id === desdeId) : undefined
+    const nuevo = origen ? duplicarProyecto(origen, nombre) : nuevoProyecto(nombre)
+    setProyectos((previos) => [...(previos ?? []), nuevo])
+    abrir(nuevo.id)
+    await guardarProyecto(nuevo)
+  }
+
+  const duplicar = async (id: string) => {
+    const origen = proyectos?.find((p) => p.id === id)
+    if (!origen) return
+    await crear(`Copia de ${origen.nombre || 'proyecto sin nombre'}`, id)
+  }
+
+  const archivar = async (id: string, archivar: boolean) => {
+    const p = proyectos?.find((x) => x.id === id)
+    if (!p) return
+    const cambiado: Proyecto = { ...p, archivado: archivar || undefined }
+    await guardar(cambiado)
+    if (archivar) cerrarPestana(id)
+  }
+
+  const eliminar = async (id: string) => {
+    const p = proyectos?.find((x) => x.id === id)
+    const nombre = p?.nombre || 'sin nombre'
+    if (!window.confirm(`¿Eliminar el proyecto "${nombre}" con todos sus conceptos, muros y partidas?`)) return
+    await eliminarProyecto(id)
+    setProyectos((previos) => (previos ?? []).filter((x) => x.id !== id))
+    setAbiertosIds((previos) => previos.filter((x) => x !== id))
+    setVista('historial')
+  }
+
+  if (!proyectos) {
+    return <div className="flex min-h-screen items-center justify-center bg-warmWhite text-charcoal">Cargando…</div>
+  }
+
+  const proyecto = vista === 'proyecto' ? (proyectos.find((p) => p.id === activoId) ?? null) : null
+  const abiertos = abiertosIds
+    .map((id) => proyectos.find((p) => p.id === id))
+    .filter((p): p is Proyecto => !!p && !p.archivado)
 
   return (
-    <div className="flex h-screen bg-warmWhite">
-      {/* Sidebar - solo desktop */}
-      {!esMobil && (
-        <Sidebar
-          proyectos={proyectos}
-          proyectoActivo={proyectoActivo}
-          seccion={seccion}
-          onProyectoSelect={setProyectoActivo}
-          onSeccionSelect={setSeccion}
-          onNuevoProyecto={crearNuevoProyecto}
-        />
-      )}
-
-      {/* Área principal */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <header className="bg-charcoal text-warmWhite px-4 py-3 flex justify-between items-center border-b border-gray-400">
-          <div>
-            <h1 className="text-xl font-bold">Calculadora APU</h1>
-            {proyectoActivo && <p className="text-sm text-gray-300">{proyectoActivo.nombre}</p>}
-          </div>
-          <div className="text-xs text-gray-400">Guardado en este dispositivo</div>
-        </header>
-
-        {/* Contenido */}
-        <div className="flex-1 overflow-auto">
-          {!proyectoActivo ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-600 mb-4">Sin proyectos</p>
-              <button onClick={crearNuevoProyecto} className="btn-primary">
-                Crear proyecto
-              </button>
-            </div>
-          ) : (
-            <>
-              {seccion === 'proyectos' && (
-                <ProyectosView
-                  proyecto={proyectoActivo}
-                  onActualizar={actualizarProyectos}
-                />
-              )}
-              {seccion === 'apu' && (
-                <ApuView
-                  proyecto={proyectoActivo}
-                  onActualizar={actualizarProyectos}
-                />
-              )}
-              {seccion === 'superficies' && (
-                <SuperficiesView
-                  proyecto={proyectoActivo}
-                  onActualizar={actualizarProyectos}
-                />
-              )}
-              {seccion === 'ajustes' && (
-                <AjustesView
-                  proyectos={proyectos}
-                  onActualizar={actualizarProyectos}
-                  onNuevoProyecto={crearNuevoProyecto}
-                />
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Footer móvil */}
-      {esMobil && (
-        <nav className="bg-charcoal text-warmWhite flex justify-around border-t border-gray-400">
-          {(['proyectos', 'apu', 'superficies', 'ajustes'] as const).map((sec) => (
+    <div className="flex min-h-screen flex-col bg-warmWhite text-charcoal">
+      <header className="bg-charcoal text-warmWhite">
+        <div className="flex items-center justify-between px-4 pt-3">
+          <h1 className="text-base font-semibold">Calculadora APU</h1>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-xs text-gray-300 sm:inline">Guardado en este dispositivo</span>
             <button
-              key={sec}
-              onClick={() => setSeccion(sec)}
-              className={`flex-1 py-3 text-xs font-semibold ${
-                seccion === sec ? 'bg-safetyYellow text-charcoal' : 'hover:bg-gray-700'
-              }`}
+              onClick={() => setVista('ajustes')}
+              aria-current={vista === 'ajustes' ? 'page' : undefined}
+              className="rounded-md px-2 py-1 text-sm font-semibold hover:bg-gray-700"
             >
-              {sec === 'proyectos' && '📋'}
-              {sec === 'apu' && '💰'}
-              {sec === 'superficies' && '🎯'}
-              {sec === 'ajustes' && '⚙️'}
+              Ajustes
             </button>
-          ))}
-        </nav>
+          </div>
+        </div>
+        <ProyectoTabs
+          abiertos={abiertos}
+          activoId={proyecto?.id ?? null}
+          onSeleccionar={abrir}
+          onVerTodos={() => setVista('historial')}
+          onRenombrar={(id, nombre) => {
+            const p = proyectos.find((x) => x.id === id)
+            if (p) void guardar({ ...p, nombre })
+          }}
+          onCerrar={cerrarPestana}
+        />
+      </header>
+
+      {vista === 'ajustes' ? (
+        <main className="flex-1 pb-6">
+          <AjustesView proyectos={proyectos} onRecargar={async () => setProyectos(await obtenerProyectos())} />
+        </main>
+      ) : vista === 'historial' || !proyecto ? (
+        <main className="flex-1 pb-6">
+          <ListaProyectos
+            proyectos={proyectos}
+            onAbrir={abrir}
+            onNuevo={crear}
+            onDuplicar={duplicar}
+            onArchivar={archivar}
+          />
+        </main>
+      ) : (
+        <div className="flex flex-1">
+          <NavSecciones seccion={seccion} onCambiar={setSeccion} />
+          <main className="min-w-0 flex-1 pb-24 md:pb-6">
+            {seccion === 'proyecto' && (
+              <ProyectoView
+                proyecto={proyecto}
+                onCambiar={guardar}
+                onEliminar={() => eliminar(proyecto.id)}
+                onArchivar={(a) => archivar(proyecto.id, a)}
+              />
+            )}
+            {seccion === 'apu' && <ApuView proyecto={proyecto} onCambiar={guardar} />}
+            {seccion === 'superficies' && <SuperficiesView proyecto={proyecto} onCambiar={guardar} />}
+            {seccion === 'cotizacion' && <PresupuestoView proyecto={proyecto} onCambiar={guardar} />}
+            {seccion === 'ajustes' && (
+              <AjustesView proyectos={proyectos} onRecargar={async () => setProyectos(await obtenerProyectos())} />
+            )}
+          </main>
+        </div>
       )}
     </div>
   )

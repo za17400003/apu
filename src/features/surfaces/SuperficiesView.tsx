@@ -1,295 +1,253 @@
 import { useState } from 'react'
-import { Proyecto, Superficie } from '@/shared/domain/types'
-import { actualizarSuperficieAreas } from '@/shared/domain/surfaces'
-import { calcularCantidadProducto } from '@/shared/domain/quantities'
-import { actualizarProyecto, crearSuperficie, actualizarSuperficie } from '@/shared/storage/db'
-import { formatearMoneda } from '@/shared/domain/rounding'
+import { Abertura, Proyecto, Superficie } from '@/shared/domain/types'
+import { resumenSuperficie } from '@/shared/domain/surfaces'
+import { nuevaAbertura, nuevoMuro } from '@/shared/domain/factories'
+import { UNIDADES_COMPRA, simboloUnidad } from '@/shared/domain/units'
+import { Campo } from '@/shared/ui/Campo'
+import { CampoNumero } from '@/shared/ui/CampoNumero'
+import { SelectUnidad } from '@/shared/ui/SelectUnidad'
+import { FormNuevoElemento } from '@/shared/ui/FormNuevoElemento'
 
-interface SuperficiesViewProps {
+// Reglas por tipo de dato (ver shared/validation/numeros.ts)
+const REGLA_MEDIDA = { positivo: true }
+const REGLA_PORCENTAJE = { min: 0, max: 100 }
+
+interface Props {
   proyecto: Proyecto
-  onActualizar: () => void
+  onCambiar: (p: Proyecto) => void
 }
 
-export default function SuperficiesView({ proyecto, onActualizar }: SuperficiesViewProps) {
-  const [superficieActiva, setSuperficieActiva] = useState<Superficie | null>(
-    proyecto.superficies[0] || null
-  )
+export default function SuperficiesView({ proyecto, onCambiar }: Props) {
+  const [seleccionadoId, setSeleccionadoId] = useState<string | null>(null)
+  const [creando, setCreando] = useState(false)
 
-  const crearMuro = async () => {
-    const nombre = prompt('Nombre del muro:') || 'Muro'
-    const id = await crearSuperficie({
-      project_id: proyecto.id,
-      nombre,
-      ancho_m: 5,
-      alto_m: 3,
-      aberturas: [],
-      area_bruta: 15,
-      area_neta: 15,
-      acabado: 'Pintura',
-      rendimiento: 0.2,
-      desperdicio_pct: 10,
-      presentacion: '1L',
-      cantidad_redondeada: true,
-      cantidad_total: 0,
-      fecha_actualizacion: new Date().toISOString(),
-    })
-    onActualizar()
+  const muro = proyecto.superficies.find((s) => s.id === seleccionadoId) ?? proyecto.superficies[0]
+
+  const reemplazar = (s: Superficie) =>
+    onCambiar({ ...proyecto, superficies: proyecto.superficies.map((x) => (x.id === s.id ? s : x)) })
+
+  const agregar = (s: Superficie) => {
+    onCambiar({ ...proyecto, superficies: [...proyecto.superficies, s] })
+    setSeleccionadoId(s.id)
+    setCreando(false)
   }
 
-  const actualizarSuperficieGuardada = async (s: Superficie) => {
-    const calculada = actualizarSuperficieAreas(s)
-    // Recalcular cantidad si hay rendimiento
-    if (calculada.rendimiento > 0) {
-      const qty = calcularCantidadProducto(
-        calculada.area_neta,
-        calculada.rendimiento,
-        parseFloat(calculada.presentacion) || 1,
-        1,
-        calculada.desperdicio_pct,
-        calculada.cantidad_redondeada
-      )
-      calculada.cantidad_total = qty.cantidad_final
-    }
-    await actualizarSuperficie(calculada)
-    setSuperficieActiva(calculada)
-    onActualizar()
+  const eliminar = (s: Superficie) => {
+    if (!window.confirm(`¿Eliminar el muro "${s.nombre || 'sin nombre'}"?`)) return
+    onCambiar({ ...proyecto, superficies: proyecto.superficies.filter((x) => x.id !== s.id) })
+    setSeleccionadoId(null)
   }
 
-  const agregarAbertura = () => {
-    if (!superficieActiva) return
-    const nuevaAbertura = {
-      id: crypto.randomUUID(),
-      ancho_m: 1,
-      alto_m: 2,
-    }
-    const superficie = {
-      ...superficieActiva,
-      aberturas: [...superficieActiva.aberturas, nuevaAbertura],
-    }
-    actualizarSuperficieGuardada(superficie)
-  }
-
-  if (!superficieActiva) {
+  if (!muro) {
     return (
-      <div className="p-8 text-center">
-        <p className="text-gray-600 mb-4">Sin superficies (muros)</p>
-        <button onClick={crearMuro} className="btn-primary">
-          Crear muro
-        </button>
+      <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
+        <h2 className="text-lg font-semibold">Muros y superficies</h2>
+        <p className="text-gray-700">Mide un muro, descuenta puertas y ventanas y calcula cuánto producto necesitas.</p>
+        <FormNuevoElemento titulo="Nuevo muro" placeholder="Ej. Muro sala norte" onCrear={(nombre) => agregar(nuevoMuro(nombre))} />
       </div>
     )
   }
 
+  // Los resultados se calculan desde las entradas; un error indica medidas incompletas, no un fallo de la app.
+  let resumen: ReturnType<typeof resumenSuperficie> | null = null
+  let aviso = ''
+  try {
+    resumen = resumenSuperficie(muro)
+  } catch (e) {
+    aviso = e instanceof Error ? e.message : 'Revisa las medidas.'
+  }
+
+  const simboloCompra = simboloUnidad(muro.unidad_compra)
+
+  const actualizarAbertura = (i: number, a: Abertura) =>
+    reemplazar({ ...muro, aberturas: muro.aberturas.map((x, k) => (k === i ? a : x)) })
+
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">{superficieActiva.nombre}</h2>
-        <button onClick={crearMuro} className="btn-secondary btn-small">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
+      <div className="flex flex-wrap items-end gap-3">
+        <Campo label="Muro" className="min-w-0 flex-1 md:max-w-md">
+          <select className="input-base" value={muro.id} onChange={(e) => setSeleccionadoId(e.target.value)}>
+            {proyecto.superficies.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.nombre || 'Sin nombre'}
+              </option>
+            ))}
+          </select>
+        </Campo>
+        <button className="btn-secondary" onClick={() => setCreando((v) => !v)}>
           + Nuevo muro
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Dimensiones y aberturas */}
-        <div className="space-y-6">
-          <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Dimensiones</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="label-base">Ancho (m)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={superficieActiva.ancho_m}
-                  onChange={(e) => {
-                    const superficie = {
-                      ...superficieActiva,
-                      ancho_m: parseFloat(e.target.value) || 0,
-                    }
-                    actualizarSuperficieGuardada(superficie)
-                  }}
-                  className="input-base"
-                />
-              </div>
-              <div>
-                <label className="label-base">Alto (m)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={superficieActiva.alto_m}
-                  onChange={(e) => {
-                    const superficie = {
-                      ...superficieActiva,
-                      alto_m: parseFloat(e.target.value) || 0,
-                    }
-                    actualizarSuperficieGuardada(superficie)
-                  }}
-                  className="input-base"
-                />
-              </div>
-              <div className="bg-blue-50 p-3 rounded text-sm">
-                <p>Área bruta: <strong>{superficieActiva.area_bruta.toFixed(2)} m²</strong></p>
-              </div>
-            </div>
-          </div>
+      {creando && (
+        <FormNuevoElemento
+          titulo="Nuevo muro"
+          placeholder="Ej. Muro sala norte"
+          onCrear={(nombre) => agregar(nuevoMuro(nombre))}
+          onCancelar={() => setCreando(false)}
+        />
+      )}
 
-          {/* Aberturas */}
-          <div className="card">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Aberturas (puertas, ventanas)</h3>
-              <button onClick={agregarAbertura} className="btn-secondary btn-small">
-                + Abertura
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
+          <section className="card space-y-4">
+            <div className="flex items-end gap-3">
+              <Campo label="Nombre del muro" className="flex-1">
+                <input className="input-base" value={muro.nombre} onChange={(e) => reemplazar({ ...muro, nombre: e.target.value })} />
+              </Campo>
+              <button className="btn-danger btn-small" onClick={() => eliminar(muro)}>
+                Eliminar
               </button>
             </div>
-            <div className="space-y-3">
-              {superficieActiva.aberturas.map((abertura, idx) => (
-                <div key={abertura.id} className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={abertura.ancho_m}
-                      onChange={(e) => {
-                        const aberturas = [...superficieActiva.aberturas]
-                        aberturas[idx].ancho_m = parseFloat(e.target.value) || 0
-                        const superficie = { ...superficieActiva, aberturas }
-                        actualizarSuperficieGuardada(superficie)
-                      }}
-                      className="input-base text-sm"
-                      placeholder="Ancho"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={abertura.alto_m}
-                      onChange={(e) => {
-                        const aberturas = [...superficieActiva.aberturas]
-                        aberturas[idx].alto_m = parseFloat(e.target.value) || 0
-                        const superficie = { ...superficieActiva, aberturas }
-                        actualizarSuperficieGuardada(superficie)
-                      }}
-                      className="input-base text-sm"
-                      placeholder="Alto"
-                    />
-                  </div>
-                  <button
-                    onClick={() => {
-                      const aberturas = superficieActiva.aberturas.filter((_, i) => i !== idx)
-                      const superficie = { ...superficieActiva, aberturas }
-                      actualizarSuperficieGuardada(superficie)
-                    }}
-                    className="btn-danger btn-small"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+            <div className="grid grid-cols-2 gap-3">
+              <Campo label="Ancho (m)">
+                <CampoNumero
+                  etiqueta="Ancho en metros"
+                  valor={muro.ancho_m}
+                  regla={REGLA_MEDIDA}
+                  onCambio={(ancho_m) => reemplazar({ ...muro, ancho_m })}
+                />
+              </Campo>
+              <Campo label="Alto (m)">
+                <CampoNumero
+                  etiqueta="Alto en metros"
+                  valor={muro.alto_m}
+                  regla={REGLA_MEDIDA}
+                  onCambio={(alto_m) => reemplazar({ ...muro, alto_m })}
+                />
+              </Campo>
             </div>
-            <div className="mt-4 bg-green-50 p-3 rounded text-sm">
-              <p>Área neta: <strong>{superficieActiva.area_neta.toFixed(2)} m²</strong></p>
+          </section>
+
+          <section className="card space-y-3">
+            <div className="flex items-baseline justify-between">
+              <h2 className="font-semibold">Aberturas</h2>
+              <button
+                className="btn-secondary btn-small"
+                onClick={() => reemplazar({ ...muro, aberturas: [...muro.aberturas, nuevaAbertura()] })}
+              >
+                + Agregar abertura
+              </button>
             </div>
-          </div>
+            {muro.aberturas.length === 0 && <p className="text-sm text-gray-600">Sin puertas ni ventanas.</p>}
+            {muro.aberturas.map((a, i) => (
+              <div key={a.id} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                <Campo label="Ancho (m)">
+                  <CampoNumero
+                    etiqueta={`Ancho abertura ${i + 1}`}
+                    valor={a.ancho_m}
+                    regla={REGLA_MEDIDA}
+                    onCambio={(ancho_m) => actualizarAbertura(i, { ...a, ancho_m })}
+                  />
+                </Campo>
+                <Campo label="Alto (m)">
+                  <CampoNumero
+                    etiqueta={`Alto abertura ${i + 1}`}
+                    valor={a.alto_m}
+                    regla={REGLA_MEDIDA}
+                    onCambio={(alto_m) => actualizarAbertura(i, { ...a, alto_m })}
+                  />
+                </Campo>
+                <button
+                  aria-label={`Quitar abertura ${i + 1}`}
+                  className="btn-danger btn-small"
+                  onClick={() => reemplazar({ ...muro, aberturas: muro.aberturas.filter((_, k) => k !== i) })}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </section>
         </div>
 
-        {/* Producto y cantidad */}
         <div className="space-y-6">
-          <div className="card">
-            <h3 className="text-lg font-semibold mb-4">Producto</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="label-base">Acabado</label>
-                <input
-                  type="text"
-                  value={superficieActiva.acabado}
-                  onChange={(e) => {
-                    const superficie = { ...superficieActiva, acabado: e.target.value }
-                    actualizarSuperficieGuardada(superficie)
-                  }}
-                  className="input-base"
-                  placeholder="Ej: Pintura mate blanca"
-                />
-              </div>
-              <div>
-                <label className="label-base">Rendimiento (por m²)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={superficieActiva.rendimiento}
-                  onChange={(e) => {
-                    const superficie = {
-                      ...superficieActiva,
-                      rendimiento: parseFloat(e.target.value) || 0,
-                    }
-                    actualizarSuperficieGuardada(superficie)
-                  }}
-                  className="input-base"
-                  placeholder="Ej: 0.15 para L/m²"
-                />
-              </div>
-              <div>
-                <label className="label-base">Presentación (unidad)</label>
-                <input
-                  type="text"
-                  value={superficieActiva.presentacion}
-                  onChange={(e) => {
-                    const superficie = { ...superficieActiva, presentacion: e.target.value }
-                    actualizarSuperficieGuardada(superficie)
-                  }}
-                  className="input-base"
-                  placeholder="Ej: 1L, 4L, 20kg"
-                />
-              </div>
-              <div>
-                <label className="label-base">Desperdicio (%)</label>
-                <input
-                  type="number"
-                  value={superficieActiva.desperdicio_pct}
-                  onChange={(e) => {
-                    const superficie = {
-                      ...superficieActiva,
-                      desperdicio_pct: parseFloat(e.target.value) || 0,
-                    }
-                    actualizarSuperficieGuardada(superficie)
-                  }}
-                  className="input-base"
-                  placeholder="Ej: 10"
-                />
-              </div>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={superficieActiva.cantidad_redondeada}
-                  onChange={(e) => {
-                    const superficie = {
-                      ...superficieActiva,
-                      cantidad_redondeada: e.target.checked,
-                    }
-                    actualizarSuperficieGuardada(superficie)
-                  }}
-                />
-                <span className="text-sm">Redondear hacia arriba</span>
-              </label>
-            </div>
-          </div>
+          <section className="card grid gap-3 sm:grid-cols-2">
+            <h2 className="font-semibold sm:col-span-2">Producto</h2>
+            <Campo label="Acabado o producto" className="sm:col-span-2">
+              <input
+                className="input-base"
+                value={muro.acabado}
+                placeholder="Ej. Pintura vinílica mate blanca"
+                onChange={(e) => reemplazar({ ...muro, acabado: e.target.value })}
+              />
+            </Campo>
+            <Campo label={`Rendimiento (${simboloCompra} por m²)`}>
+              <CampoNumero
+                etiqueta="Rendimiento por m²"
+                valor={muro.rendimiento}
+                regla={REGLA_MEDIDA}
+                onCambio={(rendimiento) => reemplazar({ ...muro, rendimiento })}
+              />
+            </Campo>
+            <Campo label="Unidad de compra">
+              <SelectUnidad
+                opciones={UNIDADES_COMPRA}
+                valor={muro.unidad_compra}
+                etiqueta="Unidad de compra"
+                onCambio={(unidad_compra) => reemplazar({ ...muro, unidad_compra })}
+              />
+            </Campo>
+            <Campo label={`Contenido por envase (${simboloCompra})`}>
+              <CampoNumero
+                etiqueta="Contenido por envase"
+                valor={muro.presentacion_cantidad}
+                regla={REGLA_MEDIDA}
+                onCambio={(presentacion_cantidad) => reemplazar({ ...muro, presentacion_cantidad })}
+              />
+            </Campo>
+            <Campo label="Desperdicio %">
+              <CampoNumero
+                etiqueta="Desperdicio del producto"
+                valor={muro.desperdicio_pct}
+                regla={REGLA_PORCENTAJE}
+                onCambio={(desperdicio_pct) => reemplazar({ ...muro, desperdicio_pct })}
+              />
+            </Campo>
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
+              <input
+                type="checkbox"
+                checked={muro.redondear_envases}
+                onChange={(e) => reemplazar({ ...muro, redondear_envases: e.target.checked })}
+              />
+              Comprar envases completos (redondear hacia arriba)
+            </label>
+          </section>
 
-          {/* Resultado */}
-          <div className="card bg-successGreen bg-opacity-20">
-            <h3 className="text-lg font-semibold mb-4">Cantidad calculada</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span>Cantidad total:</span>
-                <span className="font-mono font-bold text-lg">{superficieActiva.cantidad_total.toFixed(2)}</span>
-              </div>
-              <div className="text-xs text-gray-600">
-                {superficieActiva.area_neta.toFixed(2)} m² × {superficieActiva.rendimiento} /m² ×
-                (1+{superficieActiva.desperdicio_pct}%)
-              </div>
-            </div>
-          </div>
+          <section className="card space-y-2">
+            <h2 className="font-semibold">Resultado</h2>
+            {resumen ? (
+              <dl className="space-y-1 text-sm">
+                <Linea etiqueta="Área bruta" valor={`${resumen.area_bruta.toFixed(2)} m²`} />
+                <Linea etiqueta="Aberturas" valor={`− ${resumen.area_aberturas.toFixed(2)} m²`} />
+                <Linea etiqueta="Área neta" valor={`${resumen.area_neta.toFixed(2)} m²`} negrita />
+                <Linea etiqueta="Producto necesario" valor={`${resumen.cantidad_bruta.toFixed(2)} ${simboloCompra}`} />
+                <div className="rounded-md bg-successGreen/20 p-3">
+                  <p className="text-sm text-gray-700">Envases a comprar</p>
+                  <p className="font-mono text-3xl font-semibold">
+                    {muro.redondear_envases ? resumen.cantidad_final : resumen.cantidad_envases.toFixed(2)}
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    de {muro.presentacion_cantidad} {simboloCompra}
+                  </p>
+                </div>
+              </dl>
+            ) : (
+              <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">
+                {aviso}
+              </p>
+            )}
+          </section>
         </div>
       </div>
+    </div>
+  )
+}
+
+function Linea({ etiqueta, valor, negrita = false }: { etiqueta: string; valor: string; negrita?: boolean }) {
+  return (
+    <div className={`flex justify-between gap-2 ${negrita ? 'font-semibold' : ''}`}>
+      <dt>{etiqueta}</dt>
+      <dd className="font-mono">{valor}</dd>
     </div>
   )
 }
