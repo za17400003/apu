@@ -40,6 +40,7 @@ const AberturaSchema: z.ZodType<Abertura> = z.object({
   id: z.string(),
   ancho_m: z.number().positive(),
   alto_m: z.number().positive(),
+  altura_piso_m: z.number().nonnegative().optional(),
 })
 
 const SuperficieSchema: z.ZodType<Superficie> = z.object({
@@ -49,11 +50,6 @@ const SuperficieSchema: z.ZodType<Superficie> = z.object({
   alto_m: z.number().positive(),
   aberturas: z.array(AberturaSchema),
   acabado: z.string(),
-  rendimiento: z.number().positive(),
-  unidad_compra: z.string().min(1),
-  presentacion_cantidad: z.number().positive(),
-  desperdicio_pct: porcentaje,
-  redondear_envases: z.boolean(),
 })
 
 const PartidaSchema: z.ZodType<Partida> = z.object({

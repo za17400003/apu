@@ -5,7 +5,8 @@ import { Proyecto } from './types'
 import { nuevoId } from './ids'
 
 export function duplicarProyecto(origen: Proyecto, nombre: string): Proyecto {
-  const { archivado: _archivado, ...base } = origen
+  // Una copia no hereda folio ni archivado: su folio es dinámico como el de cualquier proyecto nuevo.
+  const { archivado: _archivado, folio: _folio, ...base } = origen
 
   const idConcepto = new Map(origen.conceptos.map((c) => [c.id, nuevoId()]))
   const idMuro = new Map(origen.superficies.map((s) => [s.id, nuevoId()]))

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { borrarTodo, guardarProyecto, obtenerProyectos } from '@/shared/storage/db'
 import { construirRespaldo, importarRespaldo } from '@/shared/storage/backup'
-import { nuevoConcepto, nuevoInsumo, nuevoMuro, nuevoProyecto } from '@/shared/domain/factories'
+import { nuevaAbertura, nuevoConcepto, nuevoInsumo, nuevoMuro, nuevoProyecto } from '@/shared/domain/factories'
 
 beforeEach(async () => {
   await borrarTodo()
@@ -11,7 +11,7 @@ describe('persistencia de proyectos', () => {
   it('conserva conceptos y muros dentro del proyecto al volver a leerlo', async () => {
     const concepto = nuevoConcepto('Pintura muro', 'm2')
     concepto.materiales.push({ ...nuevoInsumo('L'), descripcion: 'Pintura', cantidad: 0.15, costo_unitario: 400 })
-    const muro = { ...nuevoMuro('Sala'), rendimiento: 0.15, unidad_compra: 'L', presentacion_cantidad: 4 }
+    const muro = { ...nuevoMuro('Sala'), aberturas: [nuevaAbertura()] }
 
     await guardarProyecto({ ...nuevoProyecto('Casa García'), conceptos: [concepto], superficies: [muro] })
 
@@ -19,7 +19,7 @@ describe('persistencia de proyectos', () => {
     expect(leido.nombre).toBe('Casa García')
     expect(leido.conceptos).toHaveLength(1)
     expect(leido.conceptos[0].materiales[0].costo_unitario).toBe(400)
-    expect(leido.superficies[0].presentacion_cantidad).toBe(4)
+    expect(leido.superficies[0].aberturas).toHaveLength(1)
   })
 
   it('exporta y reimporta un respaldo como proyectos nuevos', async () => {

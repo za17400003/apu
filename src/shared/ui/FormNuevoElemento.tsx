@@ -1,29 +1,19 @@
 import { useState } from 'react'
-import { Unidad } from '@/shared/domain/units'
 import { Campo } from './Campo'
-import { SelectUnidad } from './SelectUnidad'
 
-/**
- * Alta de un concepto o muro: pide el nombre (y la unidad, si aplica)
- * antes de crear el elemento. Sin ventanas emergentes.
- */
+/** Alta rápida de un elemento: solo pide el nombre. Sin ventanas emergentes. */
 export function FormNuevoElemento({
   titulo,
   placeholder,
-  unidades,
-  unidadInicial,
   onCrear,
   onCancelar,
 }: {
   titulo: string
   placeholder: string
-  unidades?: Unidad[]
-  unidadInicial?: string
-  onCrear: (nombre: string, unidad: string) => void
+  onCrear: (nombre: string) => void
   onCancelar?: () => void
 }) {
   const [nombre, setNombre] = useState('')
-  const [unidad, setUnidad] = useState(unidadInicial ?? '')
   const [error, setError] = useState('')
 
   return (
@@ -35,7 +25,7 @@ export function FormNuevoElemento({
           setError('Escribe un nombre antes de crear.')
           return
         }
-        onCrear(nombre.trim(), unidad)
+        onCrear(nombre.trim())
       }}
     >
       <p className="text-sm font-semibold md:hidden">{titulo}</p>
@@ -51,11 +41,6 @@ export function FormNuevoElemento({
           className="input-base"
         />
       </Campo>
-      {unidades && (
-        <Campo label="Unidad de obra" className="md:w-64">
-          <SelectUnidad opciones={unidades} valor={unidad} onCambio={setUnidad} etiqueta="Unidad de obra" />
-        </Campo>
-      )}
       <div className="flex gap-2">
         <button type="submit" className="btn-primary">
           Crear

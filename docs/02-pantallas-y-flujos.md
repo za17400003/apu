@@ -2,61 +2,74 @@
 
 ## Navegación principal
 
-1. **Proyecto**: nombre, fecha, ubicación opcional, moneda, notas y conceptos incluidos.
-2. **APU**: edición del concepto, unidad, composición, cantidades, costos y precio unitario.
-3. **Superficies**: muros y áreas medidas, aberturas, acabados y productos con imagen.
-4. **Catálogo**: insumos, unidades, costos, proveedor opcional, rendimiento y fecha del precio.
-5. **Guías**: ejercicios y explicaciones de cálculo.
-6. **Ajustes**: moneda, porcentajes predeterminados, respaldo, privacidad y datos locales.
+Cuatro secciones, iguales en escritorio (columna lateral) y en móvil (barra inferior):
 
-En móvil, Proyecto/APU/Catálogo/Más se convierten en navegación inferior; Superficies se alcanza desde el proyecto y el APU.
+1. **Proyecto**: nombre, cliente, folio, ubicación de la obra, moneda, notas y resumen de conceptos y muros.
+2. **APU**: conceptos con su composición (materiales, mano de obra, equipo), porcentajes y precio unitario.
+   Al escribir un insumo ya capturado antes (en este proyecto o en otro), se sugiere y se completa solo.
+3. **Cotización**: partidas (un concepto del APU × una cantidad), condiciones comerciales, totales e impresión.
+   Si la cantidad de una partida viene de un muro, el muro se mide ahí mismo: no hay pantalla de muros aparte
+   (ver "Flujo de muro", abajo, y la razón del cambio en docs/15).
+4. **Ajustes**: datos del contratista (van en el encabezado de la cotización impresa), respaldo, borrado y
+   estado del almacenamiento.
+
+No hay "Catálogo" ni "Guías" como pantallas propias: el catálogo de insumos es una sugerencia dentro de APU
+(sin pantalla dedicada), y el modo estudiante con ejemplos guiados sigue sin construirse (ver `docs/10`, roadmap).
 
 ## Pantallas
 
-- Inicio/herramienta: crear presupuesto, abrir reciente, cargar ejemplo educativo.
-- Editor de proyecto: datos básicos y lista de conceptos.
-- Editor APU: pestañas internas Desglose, Costos indirectos y Resultado.
-- Editor de muro: croquis, medidas, aberturas y acabado.
-- Selector de producto: catálogo local, imagen, rendimiento y presentación.
-- Historial local: proyectos recientes, buscar, duplicar, exportar y eliminar.
-- Guía educativa: instrucciones y ejemplos reproducibles.
-- Ajustes y privacidad: estado de almacenamiento, respaldo y eliminación.
-- Impresión/descarga: resumen del proyecto, croquis, producto seleccionado y desglose.
+- **Historial** (pantalla de entrada): buscar por nombre, cliente o folio; ordenar; filtrar activos/archivados;
+  crear, duplicar o archivar un proyecto.
+- **Datos del proyecto**: nombre (sincronizado con la pestaña), cliente, folio (sugerido o propio), moneda,
+  notas, resumen de conceptos y muros, archivar/eliminar.
+- **APU**: selector de concepto, alta de concepto (solo pide nombre; la unidad arranca en m² y se cambia aquí),
+  renglones de materiales/mano de obra/equipo con proveedor y fecha del precio, resultado con indirectos y
+  utilidad.
+- **Cotización**: partidas, condiciones comerciales (IVA, anticipo, vigencia), resumen con totales, documento
+  de impresión.
+- **Dentro de una partida, al medir un muro**: croquis siempre visible; botón "Editar muro" para nombre,
+  ancho, alto y aberturas (cada una con su altura desde el piso, para distinguir puerta de ventana).
+- **Ajustes**: perfil del contratista, estado del almacenamiento, exportar/importar respaldo, borrar todo.
 
 ## Flujo principal: contratista
 
-Inicio → Nuevo proyecto → Añadir concepto → Definir unidad/cantidad → Añadir materiales, mano de obra y equipo → Ajustar indirectos/utilidad → Revisar precio unitario → Añadir al presupuesto → Vista previa → Imprimir/guardar PDF.
+Historial → Nuevo proyecto (solo el nombre) → APU: nuevo concepto (solo el nombre) → Añadir materiales, mano de
+obra y equipo → Ajustar indirectos/utilidad → Revisar precio unitario → Cotización: agregar partida → Elegir el
+concepto y cómo se obtiene la cantidad → Revisar total → Imprimir o guardar PDF.
 
-## Flujo de muro y producto
+## Flujo de muro (dentro de una partida)
 
-Proyecto → Superficies → Añadir muro → Capturar ancho/alto → Añadir aberturas opcionales → Revisar área neta → Elegir acabado → Elegir o crear producto → Confirmar rendimiento, desperdicio y precio → Ver cantidad calculada y miniatura → Añadir al APU.
+Cotización → Agregar partida → "Área neta de un muro" → se crea el muro si no hay ninguno (o se elige uno ya
+creado) → Ancho y alto → Aberturas opcionales, cada una con su altura desde el piso → El croquis y el importe de
+la partida se actualizan solos.
 
 **Detalles del cálculo:**
-- Área calculada: (ancho en m × alto en m) − Σ(aberturas rectangulares)
-- Rendimiento: expresado en unidades de compra por m² (p. ej., 0,2 L/m², 2 kg/m², 5 piezas/m²)
-- Desperdicio: porcentaje configurable (p. ej., 10% para evaporación o recortes)
-- Cantidad total = (área neta × rendimiento) × (1 + desperdicio%) / factor de presentación (p. ej., L por cubeta)
-- Envases requeridos: se redondea hacia arriba solo en compra; el usuario puede desactivar para ver consumo fraccionario
-- Costo producto: precio unitario × cantidad total de envases
+- Área neta = (ancho × alto) − Σ(aberturas)
+- Importe de la partida = precio unitario del concepto × área neta
+- Croquis: aproximado, con las aberturas repartidas a lo ancho (la app no captura su posición horizontal exacta);
+  avisa si una abertura no cabe, en vez de dibujarla mal.
+
+No existe ya un cálculo de "cuántos envases de producto comprar" dentro del muro: ese número no llegaba a
+ningún lado (ver docs/15). Si una partida necesita esa cantidad, se escribe directamente ahí como insumo del
+concepto (p. ej., litros de pintura como material, con su propio costo y rendimiento).
 
 ## Flujo estudiante
 
-Inicio → Ejemplo educativo → Leer unidades y supuestos → Cambiar datos → Ver el efecto en el desglose → Restablecer ejemplo o guardar copia.
+Pendiente de construir (fuera del alcance de esta fase; ver `docs/10-calidad-y-roadmap.md`).
 
 ## Popups y confirmaciones
 
-- Confirmación antes de eliminar proyecto, concepto o insumo.
+- Confirmación antes de eliminar un proyecto, un concepto, una partida o un muro.
 - Alerta antes de borrar todos los datos locales.
-- Selector de archivo para imagen y respaldo JSON.
-- Diálogo para importar respaldo, con vista de cantidad de proyectos y opción de cancelar.
-- Ayuda contextual para base de porcentaje, rendimiento y desperdicio.
+- Selector de archivo para el respaldo JSON.
+- `window.confirm` nativo para estas confirmaciones; no hay cuadros propios.
 
-No usar popups publicitarios, anuncios intersticiales ni cuadros modales al abrir la página.
+No se usan popups publicitarios, anuncios intersticiales ni cuadros modales al abrir la página.
 
 ## Avisos y errores
 
-- Mensaje de guardado local al cambiar datos; nunca afirmar que existe copia en nube.
-- Advertencia de precio sin fuente/fecha o precio con antigüedad configurable.
-- Validación inline para valores negativos, dimensiones vacías o unidad incompatible.
-- Si el navegador rechaza escritura por cuota, conservar la pantalla y ofrecer exportar o quitar imágenes grandes.
-- Aviso al importar datos que reemplazan o combinan con el estado actual.
+- Mensaje "Guardado en este dispositivo"; nunca se afirma que existe copia en la nube.
+- Aviso si falta la fecha del precio de un insumo.
+- Validación inline para valores negativos, texto no numérico, fuera de rango o aberturas que no caben.
+- Aviso de folio repetido si coincide con el de otro proyecto.
+- Aviso al importar un respaldo que no tiene la estructura esperada o es de una versión más nueva.

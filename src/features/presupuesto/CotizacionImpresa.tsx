@@ -6,6 +6,8 @@ import { simboloUnidad } from '@/shared/domain/units'
 
 interface Props {
   proyecto: Proyecto
+  /** Folio efectivo del documento (fijado o sugerido). */
+  folio: string
   perfil: Perfil
   cotizacion: Cotizacion
   anexo: boolean
@@ -15,7 +17,7 @@ interface Props {
 const pct = (v: number) => formatearNumero(v, Number.isInteger(v) ? 0 : 2)
 
 /** Documento para imprimir o guardar como PDF. Se muestra solo al imprimir (ver globals.css). */
-export function CotizacionImpresa({ proyecto, perfil, cotizacion, anexo }: Props) {
+export function CotizacionImpresa({ proyecto, folio, perfil, cotizacion, anexo }: Props) {
   const m = (v: number) => formatearMoneda(v, proyecto.moneda)
   const hoy = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
 
@@ -36,7 +38,7 @@ export function CotizacionImpresa({ proyecto, perfil, cotizacion, anexo }: Props
         </div>
         <div className="imp-doc">
           <p className="imp-titulo">COTIZACIÓN</p>
-          <p>Folio: {proyecto.folio || '—'}</p>
+          <p>Folio: {folio || '—'}</p>
           <p>Fecha: {hoy}</p>
           <p>Vigencia: {proyecto.vigencia_dias > 0 ? `${proyecto.vigencia_dias} días naturales` : 'sin vencimiento definido'}</p>
         </div>

@@ -4,18 +4,32 @@ import { resumenSuperficie } from '@/shared/domain/surfaces'
 import { formatearMoneda } from '@/shared/domain/rounding'
 import { simboloUnidad } from '@/shared/domain/units'
 import { Campo } from '@/shared/ui/Campo'
+import { folioEnUso } from '@/shared/domain/folio'
 
 const MONEDAS = ['MXN', 'USD', 'EUR', 'COP']
 
 interface Props {
   proyecto: Proyecto
+  /** Resto de proyectos (archivados incluidos), para avisar folios repetidos. */
+  otrosProyectos: Proyecto[]
+  /** Folio que se usará si el usuario no escribe uno; se calcula en cada render. */
+  folioSugerido: string
   onCambiar: (p: Proyecto) => void
   onEliminar: () => void
   onArchivar: (archivar: boolean) => void
 }
 
 /** El nombre se escribe aquí o en la pestaña: ambos leen el mismo dato y se actualizan juntos. */
-export default function ProyectoView({ proyecto, onCambiar, onEliminar, onArchivar }: Props) {
+export default function ProyectoView({
+  proyecto,
+  otrosProyectos,
+  folioSugerido,
+  onCambiar,
+  onEliminar,
+  onArchivar,
+}: Props) {
+  const enUso = folioEnUso(proyecto.folio ?? '', otrosProyectos.map((p) => p.folio ?? ''))
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 md:p-6">
       <section className="card grid gap-4 md:grid-cols-2">
@@ -39,13 +53,21 @@ export default function ProyectoView({ proyecto, onCambiar, onEliminar, onArchiv
           />
         </Campo>
 
-        <Campo label="Folio de cotización">
+        <Campo label="Folio de cotización" className="md:col-span-2">
           <input
             className="input-base"
-            value={proyecto.folio ?? ''}
-            placeholder="Ej. COT-2026-014"
+            value={proyecto.folio ?? folioSugerido}
+            aria-invalid={enUso}
+            aria-describedby="folio-ayuda"
             onChange={(e) => onCambiar({ ...proyecto, folio: e.target.value || undefined })}
           />
+          <span id="folio-ayuda" className={`text-xs ${enUso ? 'text-red-700' : 'text-gray-600'}`}>
+            {enUso
+              ? 'Este folio ya lo usa otro proyecto. Cámbialo para no repetir números.'
+              : proyecto.folio
+                ? 'Folio fijo. Puedes escribir el de tu propio sistema.'
+                : 'Sugerido: se fija al imprimir la cotización. Si creas otro proyecto antes, el sugerido avanza.'}
+          </span>
         </Campo>
 
         <Campo label="Dirección o ubicación de la obra" className="md:col-span-2">

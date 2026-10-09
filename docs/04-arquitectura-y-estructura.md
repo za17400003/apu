@@ -6,117 +6,126 @@
 - Separar dominio/cálculos, persistencia, componentes y pantallas.
 - El motor APU es determinista y no depende de servicios de IA ni anuncios.
 - Evitar dependencia de servicios con costo recurrente; todo proveedor externo debe ser sustituible.
-- Orientar la estructura a módulos de obra futuros, no crear capas vacías sin uso.
+- Una carpeta por pantalla en `features/`; nada se importa entre carpetas hermanas. Lo que dos pantallas necesitan
+  igual sube a `shared/`. Si un componente ya no lo usa más que una pantalla, vive dentro de esa pantalla, no en
+  una carpeta aparte (así terminaron `CroquisMuro` y `EditorMuro` dentro de `presupuesto/`: ver docs/15, "Muros
+  fusionados en Cotización").
+- Nombres de carpeta de `features/` en español, porque así está el resto del dominio y de la interfaz. Dentro de
+  `shared/domain/`, los nombres de archivo usan la palabra del dominio cuando el archivo es de este negocio
+  (`apu.ts`, `cotizacion.ts`, `croquis.ts`, `folio.ts`) y un término técnico en inglés cuando es una pieza
+  genérica de programación (`types.ts`, `factories.ts`, `ids.ts`).
 
-## Estructura prevista
+## Estructura real
 
 ```text
 calculadora-precios-unitarios/
   README.md
+  DEVELOPMENT.md
   package.json
   tsconfig.json
   vite.config.ts
   _config/
     codegraph-requirements.txt
   docs/
-  public/
-    images/
-  scripts/
-    scan-codegraph.ps1
-    query-codegraph.py
   src/
     app/
       App.tsx
-      routes.tsx
     features/
-      projects/
-      unit-prices/
-      surfaces/
-      catalog/
-      education/
-      ads/
+      proyectos/
+        ListaProyectos.tsx    historial: buscar, filtrar, ordenar, duplicar, archivar
+        ProyectoView.tsx      datos del proyecto, folio, cliente, resumen
+      apu/
+        ApuView.tsx           conceptos: materiales, mano de obra, equipo; sugerencias del catálogo
+      presupuesto/
+        PresupuestoView.tsx   partidas (concepto × cantidad), condiciones, totales, imprimir
+        EditorMuro.tsx        medidas y aberturas de un muro, dentro de una partida
+        CroquisMuro.tsx       dibujo 2D del muro a partir de sus medidas
+        CotizacionImpresa.tsx documento para imprimir o guardar como PDF
+      ajustes/
+        AjustesView.tsx       respaldo, borrado, estado del almacenamiento
+        PerfilContratista.tsx datos del contratista (van en el encabezado de la cotización)
     shared/
-      domain/
-      storage/
-      ui/
-      validation/
+      domain/     tipos y funciones puras (ver tabla abajo)
+      storage/    db.ts (Dexie) y backup.ts (exportar/importar JSON)
+      ui/         componentes de formulario reutilizados entre pantallas
+      validation/ numeros.ts (reglas de los campos) y schemas.ts (Zod, al importar)
     styles/
   tests/
     unit/
-    e2e/
   .audit/
     .gitkeep
 ```
 
-## Responsabilidades
+Lo que `docs/00` deja para después y por eso no tiene carpeta propia todavía: modo estudiante (`features/education`)
+y anuncios activos (`features/ads`; hoy es solo `shared/ui/EspacioPublicitario.tsx`, que no renderiza nada hasta
+tener aprobación — ver docs/06). No crear esas carpetas de antemano es intencional: evita capas vacías sin uso.
 
-### Características (features/)
-- **`projects`**: creación, edición, duplicación y borrado de proyectos. Gestiona lista de conceptos y metadatos (ubicación, moneda, notas).
-- **`unit-prices`**: entrada de insumos (materiales, mano de obra, equipo), cálculo de costos directos, aplicación de indirectos y utilidad. Presentación del APU desglosado.
-- **`surfaces`**: dibujo de muro 2D, cálculo de área neta, selección de aberturas, asociación de acabados y productos con imágenes.
-- **`catalog`**: almacén local de insumos/productos reutilizables con unidades, costos, rendimientos y fechas de actualización.
-- **`education`**: ejemplos guiados y ejercicios para estudiantes. Reutiliza la misma lógica de cálculo pero con datos de ejemplo claramente marcados.
-- **`ads`**: slots publicitarios tipados, desactivados en v1, listos para configuración futura.
+## shared/domain: un archivo por cálculo
 
-### Compartido (shared/)
-- **`domain`**: núcleo de la aplicación
-  - Modelos TypeScript (Project, Concept, UnitPrice, Surface, Catalog)
-  - Funciones puras de cálculo: APU, área neta, rendimiento, cantidades
-  - Sin dependencias externas, sin llamadas a IA o servicios
-  - Completamente testeable sin mocks
-  - Ejemplo: `calculateUnitPrice(costos_directos, tasa_indirectos, base_indirectos, tasa_utilidad, base_utilidad)`
+| Archivo | Qué calcula |
+|---|---|
+| `types.ts` | Los modelos: `Proyecto`, `Concepto`, `Insumo`, `Superficie`, `Abertura`, `Partida`, `Perfil`, `ItemCatalogo` |
+| `factories.ts` | Un objeto nuevo de cada tipo, con valores neutros (las tasas arrancan en 0) |
+| `apu.ts` | Precio unitario: costo directo, indirectos, utilidad |
+| `surfaces.ts` | Área bruta, aberturas, área neta de un muro |
+| `croquis.ts` | Dónde dibujar cada abertura dentro del muro (geometría del croquis) |
+| `cotizacion.ts` | Junta partidas con sus conceptos y muros: subtotal, IVA, anticipo |
+| `quantities.ts` | Cantidad de producto a partir de rendimiento y desperdicio (función genérica, sin atarse a `Superficie`) |
+| `folio.ts` | Folio sugerido (COT-AAAA-NN) y detección de folios repetidos |
+| `duplicar.ts` | Copia un proyecto completo con identificadores nuevos |
+| `fechas.ts` | Fecha de hoy en local y si una fecha es futura |
+| `rounding.ts` | Formato de moneda y de números |
+| `units.ts` | Catálogo cerrado de unidades y su símbolo |
+| `ids.ts` | Identificadores únicos; con reserva para cuando `crypto.randomUUID` no existe (ver abajo) |
+| `archivo.ts` | Nombre sugerido del PDF a partir del nombre del proyecto y el folio |
 
-- **`storage`**: persistencia
-  - Repositorio Dexie/IndexedDB (lectura, escritura, búsqueda)
-  - Exportación a JSON portátil con imágenes embedidas o referencias
-  - Importación validada (verificar versión de esquema, migración si aplica)
-  - Manejo de errores de cuota
-
-- **`validation`**: esquemas de entrada
-  - Zod o similar para validar datos al importar
-  - Validar rango de valores (p. ej., área no negativa)
-  - Conversiones de unidad seguras
-
-- **`scripts`**: automatización local de CodeGraph.
-- **`_config`**: dependencias auxiliares Python, fuera del runtime web.
-- **`.audit`**: salidas generadas del análisis, no código fuente.
+Todas son funciones puras, sin IA ni llamadas externas, y se prueban sin simular nada (`tests/unit/`).
 
 ## Persistencia
 
 ### Tecnología: Dexie + IndexedDB
-- **Base de datos**: IndexedDB nativa del navegador (Dexie es un wrapper tipado)
-- **Origen**: datos separados por origen (protocolo + dominio + puerto)
-- **Cuota**: típicamente 50MB por origen en navegadores modernos; límite negociable con el usuario
 
-### Tablas IndexedDB
-| Tabla | Contiene | Índices |
-|-------|----------|---------|
-| `projects` | Proyecto (nombre, fecha, ubicación, notas, conceptos) | id (PK), fecha |
-| `concepts` | Concepto/APU (nombre, unidad, insumos, costos, porcentajes) | id (PK), projectId (FK) |
-| `catalog` | Insumo/producto (descripción, unidad, costo, fecha, proveedor, rendimiento) | id (PK), categoryTag |
-| `surfaces` | Muro (ancho, alto, aberturas, acabado) | id (PK), projectId (FK) |
-| `images` | Blob de imagen (JPEG/PNG, optimizado) | id (PK), relatedId (p. ej., productId) |
-| `preferences` | Moneda, idioma, porcentajes por defecto | singletonKey |
+Una sola base, `CalculadoraAPU-v2`, con tres tablas:
+
+| Tabla | Contiene |
+|---|---|
+| `projects` | Cada proyecto completo: conceptos, muros y partidas van **dentro** del mismo documento, no en tablas separadas con llave foránea. Se guarda y se lee de una vez. |
+| `perfil` | Datos del contratista (un solo registro). Se usan en el encabezado de cualquier cotización que se imprima. |
+| `catalogo` | Insumos ya capturados (materiales, mano de obra, equipo), para sugerirlos al escribir uno nuevo. |
+
+No hay tabla de imágenes ni de preferencias: no se implementaron (ver docs/00, fuera de alcance en v1).
+
+### Por qué el proyecto completo es un solo documento
+
+Guardar conceptos y muros aparte, con llave al proyecto, hubiera significado dos escrituras por cambio y el riesgo
+de que una fallara y la otra no. Al ser un documento único, cada cambio es una sola escritura atómica
+(`db.projects.put(proyecto)`), y exportar/importar un proyecto es copiar un objeto, sin reconstruir relaciones.
+
+### Identificadores: no solo `crypto.randomUUID()`
+
+Esa función del navegador solo existe en contextos seguros (HTTPS o `localhost`); al abrir la app por la IP de la
+red local es HTTP, y ahí no existe. `shared/domain/ids.ts` genera el identificador con `crypto.getRandomValues`
+cuando `randomUUID` no está disponible, para que crear proyectos funcione igual en la red local.
 
 ### Ciclo de vida
-1. **Lectura**: al abrir la app, cargar proyectos recientes desde `projects`
-2. **Escritura**: cada cambio en un input se guarda automáticamente en IndexedDB
-3. **Exportación**: serializar `projects` + `concepts` + `catalog` a JSON; imágenes en base64 o como referencias
-4. **Importación**: validar archivo JSON, verificar esquema/versión, migrar si necesario, escribir en IndexedDB
-5. **Borrado**: opción en Ajustes para limpiar todo (proyectos, catálogo, imágenes)
 
-### Manejo de límites de almacenamiento
-- Alertar al usuario antes de alcanzar cuota (p. ej., 80%)
-- Permitir eliminar imágenes grandes o proyectos antiguos
-- En caso de fallo de escritura: mostrar error, mantener formulario, ofrecer exportación inmediata
-- No silenciar errores de almacenamiento
+1. **Lectura**: al abrir la app, `obtenerProyectos()` trae todos los proyectos y completa con valores por defecto
+   los campos que no existían en versiones anteriores del formato (ver `normalizar` en `storage/db.ts`).
+2. **Escritura**: cada cambio actualiza primero la pantalla y después persiste (sin esperar a Dexie para que no
+   haya demora al teclear).
+3. **Exportación/importación**: `storage/backup.ts` arma o valida (con Zod) un JSON con todos los proyectos.
+4. **Borrado**: opción en Ajustes para vaciar las tres tablas.
 
 ### Seguridad y privacidad
-- No almacenar datos de pago, credenciales, ni información sensible
-- Sin API de usuario en v1
-- Los datos son del navegador local; no hay sincronización en la nube
-- Borrar los datos del navegador elimina todo
 
-## Publicación
+- No se almacenan datos de pago ni credenciales.
+- Sin servidor ni API: todo vive en el navegador del dispositivo.
+- Borrar los datos del navegador elimina todo; no hay copia en la nube.
 
-Despliegue estático en un host cuyo plan permita uso comercial y monetización; evaluar Cloudflare Pages/Workers según los términos vigentes. No usar GitHub Pages para operar la versión comercial, pues sus restricciones excluyen hosting gratuito para sitios de negocio o SaaS. Dominio separado y opcional. No se integran servicios cloud de datos en la primera entrega.
+## Publicación y acceso en red
+
+Mientras se construye, la misma app sirve para desarrollar y para probarse: `npm run dev` levanta un único
+servidor Vite, abierto a la red local (`host: true` en `vite.config.ts`), así que un cambio se ve igual en esta
+PC y en cualquier otro dispositivo de la misma red, sin reconstruir nada. Antes de publicarla para usuarios
+reales (fuera de esta red), hace falta separar un sitio de producción: Cloudflare Pages/Workers es la opción
+evaluada: GitHub Pages excluye explícitamente hosting gratuito para sitios de negocio o SaaS.

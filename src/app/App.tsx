@@ -2,18 +2,18 @@ import { useEffect, useState } from 'react'
 import { Proyecto } from '@/shared/domain/types'
 import { nuevoProyecto } from '@/shared/domain/factories'
 import { duplicarProyecto } from '@/shared/domain/duplicar'
+import { siguienteFolio } from '@/shared/domain/folio'
 import { eliminarProyecto, guardarProyecto, limpiarBaseAnterior, obtenerProyectos } from '@/shared/storage/db'
 import { ProyectoTabs } from '@/shared/ui/ProyectoTabs'
 import { NavSecciones, Seccion } from '@/shared/ui/NavSecciones'
 import { ListaProyectos } from '@/features/proyectos/ListaProyectos'
-import ProyectoView from '@/features/projects/ProyectoView'
-import ApuView from '@/features/unit-prices/ApuView'
-import SuperficiesView from '@/features/surfaces/SuperficiesView'
+import ProyectoView from '@/features/proyectos/ProyectoView'
+import ApuView from '@/features/apu/ApuView'
 import PresupuestoView from '@/features/presupuesto/PresupuestoView'
 import AjustesView from '@/features/ajustes/AjustesView'
 
-/** Cuántos proyectos caben como pestañas de trabajo. El resto se busca en el historial. */
-const MAX_ABIERTOS = 5
+/** Solo un proyecto cargado a la vez. Abrir otro reemplaza la pestaña; el anterior sigue en el historial. */
+const MAX_ABIERTOS = 1
 
 export default function App() {
   // null = cargando. Es la única copia en memoria; cada cambio se guarda y se refleja aquí.
@@ -49,6 +49,7 @@ export default function App() {
 
   const crear = async (nombre: string, desdeId?: string) => {
     const origen = desdeId ? proyectos?.find((p) => p.id === desdeId) : undefined
+    // El folio no se asigna aquí: es dinámico hasta que la cotización se imprime (ver PresupuestoView).
     const nuevo = origen ? duplicarProyecto(origen, nombre) : nuevoProyecto(nombre)
     setProyectos((previos) => [...(previos ?? []), nuevo])
     abrir(nuevo.id)
@@ -84,13 +85,15 @@ export default function App() {
   }
 
   const proyecto = vista === 'proyecto' ? (proyectos.find((p) => p.id === activoId) ?? null) : null
+  // Dinámico: se recalcula con los proyectos actuales. Solo se guarda al imprimir o al escribirlo a mano.
+  const folioSugerido = siguienteFolio(proyectos)
   const abiertos = abiertosIds
     .map((id) => proyectos.find((p) => p.id === id))
     .filter((p): p is Proyecto => !!p && !p.archivado)
 
   return (
-    <div className="flex min-h-screen flex-col bg-warmWhite text-charcoal">
-      <header className="bg-charcoal text-warmWhite">
+    <div className="flex h-screen flex-col bg-warmWhite text-charcoal">
+      <header className="shrink-0 bg-charcoal text-warmWhite">
         <div className="flex items-center justify-between px-4 pt-3">
           <h1 className="text-base font-semibold">Calculadora APU</h1>
           <div className="flex items-center gap-3">
@@ -118,11 +121,11 @@ export default function App() {
       </header>
 
       {vista === 'ajustes' ? (
-        <main className="flex-1 pb-6">
+        <main className="min-h-0 flex-1 overflow-y-auto pb-6">
           <AjustesView proyectos={proyectos} onRecargar={async () => setProyectos(await obtenerProyectos())} />
         </main>
       ) : vista === 'historial' || !proyecto ? (
-        <main className="flex-1 pb-6">
+        <main className="min-h-0 flex-1 overflow-y-auto pb-6">
           <ListaProyectos
             proyectos={proyectos}
             onAbrir={abrir}
@@ -132,20 +135,23 @@ export default function App() {
           />
         </main>
       ) : (
-        <div className="flex flex-1">
+        <div className="flex min-h-0 flex-1">
           <NavSecciones seccion={seccion} onCambiar={setSeccion} />
-          <main className="min-w-0 flex-1 pb-24 md:pb-6">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-24 md:pb-6">
             {seccion === 'proyecto' && (
               <ProyectoView
                 proyecto={proyecto}
+                otrosProyectos={proyectos.filter((p) => p.id !== proyecto.id)}
+                folioSugerido={folioSugerido}
                 onCambiar={guardar}
                 onEliminar={() => eliminar(proyecto.id)}
                 onArchivar={(a) => archivar(proyecto.id, a)}
               />
             )}
             {seccion === 'apu' && <ApuView proyecto={proyecto} onCambiar={guardar} />}
-            {seccion === 'superficies' && <SuperficiesView proyecto={proyecto} onCambiar={guardar} />}
-            {seccion === 'cotizacion' && <PresupuestoView proyecto={proyecto} onCambiar={guardar} />}
+            {seccion === 'cotizacion' && (
+              <PresupuestoView proyecto={proyecto} folioSugerido={folioSugerido} onCambiar={guardar} />
+            )}
             {seccion === 'ajustes' && (
               <AjustesView proyectos={proyectos} onRecargar={async () => setProyectos(await obtenerProyectos())} />
             )}

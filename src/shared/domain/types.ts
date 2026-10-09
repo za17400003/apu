@@ -32,20 +32,18 @@ export interface Abertura {
   id: string
   ancho_m: number
   alto_m: number
+  /** Altura desde el piso hasta el borde inferior. 0 o ausente = toca el piso, como una puerta. */
+  altura_piso_m?: number
 }
 
+/** Un muro: solo medición. Se edita desde la partida de Cotización que lo usa. */
 export interface Superficie {
   id: string
   nombre: string
   ancho_m: number
   alto_m: number
   aberturas: Abertura[]
-  acabado: string
-  rendimiento: number // unidad_compra por m²
-  unidad_compra: string // código de UNIDADES_COMPRA
-  presentacion_cantidad: number // contenido de un envase, en unidad_compra
-  desperdicio_pct: number
-  redondear_envases: boolean
+  acabado: string // descripción libre, p. ej. "Pintura vinílica mate blanca"
 }
 
 /** Renglón de la cotización: un concepto del APU y su cantidad de obra. */
@@ -86,4 +84,22 @@ export interface Perfil {
   responsable: string
   telefono: string
   direccion: string
+}
+
+export type GrupoInsumo = 'materiales' | 'mano_obra' | 'equipo'
+
+/**
+ * Insumo guardado para sugerirlo en otros conceptos y proyectos. Se actualiza
+ * solo con el precio más reciente que haya capturado el usuario para ese
+ * insumo; no es un historial de precios.
+ */
+export interface ItemCatalogo {
+  id: string
+  grupo: GrupoInsumo
+  descripcion: string
+  unidad: string
+  costo_unitario: number
+  fuente?: string
+  fecha_precio?: string
+  actualizado: string // ISO: cuándo se guardó por última vez
 }

@@ -1,17 +1,18 @@
-import { useState } from 'react'
-import { BaseIndirectos, BaseUtilidad, Concepto, Insumo, Proyecto } from '@/shared/domain/types'
+import { useEffect, useState } from 'react'
+import { BaseIndirectos, BaseUtilidad, Concepto, GrupoInsumo, Insumo, ItemCatalogo, Proyecto } from '@/shared/domain/types'
 import { calcularCostoInsumo, calcularPrecioUnitario, sumarInsumos } from '@/shared/domain/apu'
 import { nuevoConcepto, nuevoInsumo } from '@/shared/domain/factories'
 import { UNIDADES_INSUMO, UNIDADES_OBRA, simboloUnidad } from '@/shared/domain/units'
 import { formatearMoneda } from '@/shared/domain/rounding'
 import { esFutura, hoyISO } from '@/shared/domain/fechas'
+import { guardarEnCatalogo, obtenerCatalogo } from '@/shared/storage/db'
 import { Campo } from '@/shared/ui/Campo'
 import { CampoNumero } from '@/shared/ui/CampoNumero'
 import { GrupoRadio } from '@/shared/ui/GrupoRadio'
 import { SelectUnidad } from '@/shared/ui/SelectUnidad'
 import { FormNuevoElemento } from '@/shared/ui/FormNuevoElemento'
 
-type Grupo = 'materiales' | 'mano_obra' | 'equipo'
+type Grupo = GrupoInsumo
 
 const GRUPOS: { id: Grupo; titulo: string; agregar: string; unidadInicial: string }[] = [
   { id: 'materiales', titulo: 'Materiales', agregar: 'Agregar material', unidadInicial: 'pza' },
@@ -34,14 +35,29 @@ const REGLA_CANTIDAD = { positivo: true }
 const REGLA_COSTO = { min: 0 }
 const REGLA_PORCENTAJE = { min: 0, max: 100 }
 
+// Al crear un concepto no se pregunta la unidad (antes se pedía dos veces: aquí y en el
+// editor). Arranca en m², la más común, y se cambia en el editor si hace falta.
+const UNIDAD_OBRA_DEFECTO = 'm2'
+
 interface Props {
   proyecto: Proyecto
   onCambiar: (p: Proyecto) => void
 }
 
+const CATALOGOS_VACIOS: Record<Grupo, ItemCatalogo[]> = { materiales: [], mano_obra: [], equipo: [] }
+
 export default function ApuView({ proyecto, onCambiar }: Props) {
   const [seleccionadoId, setSeleccionadoId] = useState<string | null>(null)
   const [creando, setCreando] = useState(false)
+  const [catalogos, setCatalogos] = useState(CATALOGOS_VACIOS)
+
+  // El catálogo es el mismo para todos los proyectos; se recarga tras cada guardado nuevo.
+  const recargarCatalogos = () => {
+    Promise.all([obtenerCatalogo('materiales'), obtenerCatalogo('mano_obra'), obtenerCatalogo('equipo')]).then(
+      ([materiales, mano_obra, equipo]) => setCatalogos({ materiales, mano_obra, equipo })
+    )
+  }
+  useEffect(recargarCatalogos, [])
 
   const concepto = proyecto.conceptos.find((c) => c.id === seleccionadoId) ?? proyecto.conceptos[0]
 
@@ -64,13 +80,14 @@ export default function ApuView({ proyecto, onCambiar }: Props) {
     return (
       <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
         <h2 className="text-lg font-semibold">Conceptos de obra</h2>
-        <p className="text-gray-700">Un concepto describe una unidad de obra, por ejemplo “Pintura de muro interior, por m²”.</p>
+        <p className="text-gray-700">
+          Un concepto describe una unidad de obra, por ejemplo “Pintura de muro interior, por m²”. Se crea en m²; la
+          unidad se cambia abajo si hace falta.
+        </p>
         <FormNuevoElemento
           titulo="Nuevo concepto"
           placeholder="Ej. Pintura de muro interior"
-          unidades={UNIDADES_OBRA}
-          unidadInicial="m2"
-          onCrear={(nombre, unidad) => agregar(nuevoConcepto(nombre, unidad))}
+          onCrear={(nombre) => agregar(nuevoConcepto(nombre, UNIDAD_OBRA_DEFECTO))}
         />
       </div>
     )
@@ -101,9 +118,7 @@ export default function ApuView({ proyecto, onCambiar }: Props) {
         <FormNuevoElemento
           titulo="Nuevo concepto"
           placeholder="Ej. Aplanado de muro"
-          unidades={UNIDADES_OBRA}
-          unidadInicial="m2"
-          onCrear={(nombre, unidad) => agregar(nuevoConcepto(nombre, unidad))}
+          onCrear={(nombre) => agregar(nuevoConcepto(nombre, UNIDAD_OBRA_DEFECTO))}
           onCancelar={() => setCreando(false)}
         />
       )}
@@ -139,11 +154,14 @@ export default function ApuView({ proyecto, onCambiar }: Props) {
           {GRUPOS.map((g) => (
             <GrupoInsumos
               key={g.id}
+              grupo={g.id}
               titulo={g.titulo}
               agregar={g.agregar}
               insumos={concepto[g.id]}
               unidadInicial={g.unidadInicial}
               moneda={moneda}
+              catalogo={catalogos[g.id]}
+              onCatalogoActualizado={recargarCatalogos}
               onCambio={(lista) => reemplazar({ ...concepto, [g.id]: lista } as Concepto)}
             />
           ))}
@@ -216,20 +234,28 @@ export default function ApuView({ proyecto, onCambiar }: Props) {
 }
 
 function GrupoInsumos({
+  grupo,
   titulo,
   agregar,
   insumos,
   unidadInicial,
   moneda,
+  catalogo,
+  onCatalogoActualizado,
   onCambio,
 }: {
+  grupo: Grupo
   titulo: string
   agregar: string
   insumos: Insumo[]
   unidadInicial: string
   moneda: string
+  catalogo: ItemCatalogo[]
+  onCatalogoActualizado: () => void
   onCambio: (lista: Insumo[]) => void
 }) {
+  const idDatalist = `catalogo-${grupo}`
+
   return (
     <section className="card space-y-3">
       <div className="flex items-baseline justify-between">
@@ -238,16 +264,30 @@ function GrupoInsumos({
       </div>
 
       {insumos.length === 0 && <p className="text-sm text-gray-600">Sin renglones.</p>}
+      {catalogo.length > 0 && (
+        <p className="text-xs text-gray-500">Escribe el nombre: si ya lo capturaste antes, aparece para elegirlo.</p>
+      )}
 
       {insumos.map((ins, i) => (
         <FilaInsumo
           key={ins.id}
+          grupo={grupo}
           insumo={ins}
           moneda={moneda}
+          idDatalist={idDatalist}
+          catalogo={catalogo}
+          onCatalogoActualizado={onCatalogoActualizado}
           onCambio={(nuevo) => onCambio(insumos.map((x, k) => (k === i ? nuevo : x)))}
           onQuitar={() => onCambio(insumos.filter((_, k) => k !== i))}
         />
       ))}
+
+      {/* Sugerencias del catálogo local: insumos ya capturados antes, en este u otro proyecto. */}
+      <datalist id={idDatalist}>
+        {catalogo.map((c) => (
+          <option key={c.id} value={c.descripcion} />
+        ))}
+      </datalist>
 
       <button className="btn-secondary btn-small" onClick={() => onCambio([...insumos, nuevoInsumo(unidadInicial)])}>
         + {agregar}
@@ -258,26 +298,69 @@ function GrupoInsumos({
 
 /** Un renglón de precio: el costo se edita aquí mismo, con su fuente y fecha. */
 function FilaInsumo({
+  grupo,
   insumo,
   moneda,
+  idDatalist,
+  catalogo,
+  onCatalogoActualizado,
   onCambio,
   onQuitar,
 }: {
+  grupo: Grupo
   insumo: Insumo
   moneda: string
+  idDatalist: string
+  catalogo: ItemCatalogo[]
+  onCatalogoActualizado: () => void
   onCambio: (i: Insumo) => void
   onQuitar: () => void
 }) {
+  // Al salir del renglón (de cualquiera de sus campos) se guarda en el catálogo para
+  // sugerirlo después. Sin espera: un retraso fijo dejaba sin sugerencias al segundo
+  // renglón si se agregaba antes de que pasara el tiempo del primero.
+  const guardarEnCatalogoAhora = () => {
+    if (!insumo.descripcion.trim()) return
+    guardarEnCatalogo({
+      grupo,
+      descripcion: insumo.descripcion,
+      unidad: insumo.unidad,
+      costo_unitario: insumo.costo_unitario,
+      fuente: insumo.fuente,
+      fecha_precio: insumo.fecha_precio,
+    }).then(onCatalogoActualizado)
+  }
+
+  const elegirDescripcion = (descripcion: string) => {
+    const normal = (s: string) => s.trim().toLowerCase()
+    const conocido = catalogo.find((c) => normal(c.descripcion) === normal(descripcion))
+    onCambio(
+      conocido
+        ? {
+            ...insumo,
+            descripcion,
+            unidad: conocido.unidad,
+            costo_unitario: conocido.costo_unitario,
+            fuente: conocido.fuente,
+            fecha_precio: conocido.fecha_precio,
+          }
+        : { ...insumo, descripcion }
+    )
+  }
+
   // Tres líneas con anchos relativos: descripción completa, medidas en una rejilla, fuente y fecha.
+  // onBlur en el contenedor: se dispara al salir de cualquier campo del renglón (incluida
+  // la selección de unidad), así que ya guardó antes de que se alcance a agregar otro.
   return (
-    <div className="space-y-3 rounded-md border border-gray-300 p-3">
+    <div className="space-y-3 rounded-md border border-gray-300 p-3" onBlur={guardarEnCatalogoAhora}>
       <div className="flex items-end gap-2">
         <Campo label="Descripción" className="min-w-0 flex-1">
           <input
             className="input-base"
+            list={idDatalist}
             value={insumo.descripcion}
             placeholder="Ej. Pintura látex"
-            onChange={(e) => onCambio({ ...insumo, descripcion: e.target.value })}
+            onChange={(e) => elegirDescripcion(e.target.value)}
           />
         </Campo>
         <button aria-label="Quitar renglón" onClick={onQuitar} className="btn-danger btn-small mb-0.5">

@@ -1,9 +1,8 @@
-export type Seccion = 'proyecto' | 'apu' | 'superficies' | 'cotizacion' | 'ajustes'
+export type Seccion = 'proyecto' | 'apu' | 'cotizacion' | 'ajustes'
 
 const SECCIONES: { id: Seccion; etiqueta: string }[] = [
   { id: 'proyecto', etiqueta: 'Proyecto' },
   { id: 'apu', etiqueta: 'APU' },
-  { id: 'superficies', etiqueta: 'Muros' },
   { id: 'cotizacion', etiqueta: 'Cotización' },
   { id: 'ajustes', etiqueta: 'Ajustes' },
 ]

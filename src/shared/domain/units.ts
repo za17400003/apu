@@ -33,19 +33,7 @@ export const UNIDADES_INSUMO: Unidad[] = [
   { codigo: 'lote', simbolo: 'lote', nombre: 'lote' },
 ]
 
-// Unidades en que se compra un producto y se rinde por m²
-export const UNIDADES_COMPRA: Unidad[] = [
-  { codigo: 'L', simbolo: 'L', nombre: 'litro' },
-  { codigo: 'kg', simbolo: 'kg', nombre: 'kilogramo' },
-  { codigo: 'cubeta', simbolo: 'cubeta', nombre: 'cubeta' },
-  { codigo: 'lata', simbolo: 'lata', nombre: 'lata' },
-  { codigo: 'bolsa', simbolo: 'bolsa', nombre: 'bolsa' },
-  { codigo: 'saco', simbolo: 'saco', nombre: 'saco' },
-  { codigo: 'pza', simbolo: 'pza', nombre: 'pieza' },
-  { codigo: 'm2', simbolo: 'm²', nombre: 'metro cuadrado' },
-]
-
-const TODAS = [...UNIDADES_OBRA, ...UNIDADES_INSUMO, ...UNIDADES_COMPRA]
+const TODAS = [...UNIDADES_OBRA, ...UNIDADES_INSUMO]
 
 /** Símbolo legible para un código de unidad; devuelve el código si no existe. */
 export function simboloUnidad(codigo: string): string {

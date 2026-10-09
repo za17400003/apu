@@ -11,6 +11,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Un solo servidor para todo: esta PC y la red local usan el mismo, con cambios en vivo.
+    host: true,
     open: true,
   },
 })

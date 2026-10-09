@@ -51,19 +51,7 @@ export function nuevoInsumo(unidad: string): Insumo {
 }
 
 export function nuevoMuro(nombre: string): Superficie {
-  return {
-    id: id(),
-    nombre,
-    ancho_m: 5,
-    alto_m: 3,
-    aberturas: [],
-    acabado: '',
-    rendimiento: 0,
-    unidad_compra: 'L',
-    presentacion_cantidad: 1,
-    desperdicio_pct: 0,
-    redondear_envases: true,
-  }
+  return { id: id(), nombre, ancho_m: 5, alto_m: 3, aberturas: [], acabado: '' }
 }
 
 export function nuevaAbertura(): Abertura {

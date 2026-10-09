@@ -1,7 +1,7 @@
 {
   "name": "calculadora-precios-unitarios",
   "version": "0.1.0",
-  "description": "Herramienta gratuita para cálculo de análisis de precios unitarios (APU) en construcción",
+  "description": "Calculadora gratuita de precios unitarios de construcción (APU), con catálogo local, cotizaciones imprimibles y respaldo JSON",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,8 +13,7 @@
     "e2e": "playwright test",
     "lint": "eslint src --ext .ts,.tsx",
     "codegraph": "mkdir -p .audit && codegraph ./src --output ./.audit/codegraph.html --csv ./.audit/codegraph.csv",
-    "codegraph:query": "node scripts/codegraph-query.mjs",
-    "red": "vite build && vite preview --host --port 4173"
+    "codegraph:query": "node scripts/codegraph-query.mjs"
   },
   "dependencies": {
     "dexie": "^4.0.8",

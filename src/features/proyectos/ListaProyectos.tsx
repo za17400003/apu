@@ -4,6 +4,7 @@ import { cotizar } from '@/shared/domain/cotizacion'
 import { formatearMoneda } from '@/shared/domain/rounding'
 import { Campo } from '@/shared/ui/Campo'
 import { GrupoRadio } from '@/shared/ui/GrupoRadio'
+import { EspacioPublicitario } from '@/shared/ui/EspacioPublicitario'
 
 type Filtro = 'activos' | 'archivados'
 type Orden = 'reciente' | 'nombre'
@@ -188,6 +189,9 @@ export function ListaProyectos({ proyectos, onAbrir, onNuevo, onDuplicar, onArch
           )}
         </>
       )}
+
+      {/* Lugar apartado para publicidad: al pie del historial, lejos de la navegación. Desactivado. */}
+      <EspacioPublicitario nombre="historial-pie" />
     </div>
   )
 }
