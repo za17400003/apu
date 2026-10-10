@@ -97,7 +97,7 @@ Ver carpeta `docs/`:
 ### Setup
 
 ```bash
-git clone https://github.com/za17400003/apu.git
+git clone https://github.com/za17400003/calculadora-precios-unitarios.git
 cd calculadora-precios-unitarios
 
 npm install
@@ -195,7 +195,7 @@ Ver [docs/05-datos-locales-y-privacidad.md](docs/05-datos-locales-y-privacidad.m
 
 ## Contribuciones
 
-Este es un proyecto en desarrollo. Las contribuciones se aceptan solo a través de pull requests a `https://github.com/za17400003/apu.git`.
+Este es un proyecto en desarrollo. Las contribuciones se aceptan solo a través de pull requests a `https://github.com/za17400003/calculadora-precios-unitarios`.
 
 ## Licencia
 
